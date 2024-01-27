@@ -22,10 +22,16 @@ class TelegramConnector(Connector):
             self._send(what[start: start+self.MAX_MSG_SIZE])
     
     def _send(self, what: str):
+        what="<b>"+what+"</b>"
         """Raw sends a message with no regard for length"""
         result = requests.post(
-            f"https://api.telegram.org/bot{self.config['telegram']['api_key']}/sendMessage", 
-            json={"chat_id": self.config["telegram"]["chat_id"], "text": what}).json()
+            f"https://api.telegram.org/bot{self.config['telegram']['api_key']}/sendMessage",
+            json={
+                "chat_id": self.config["telegram"]["chat_id"],
+                "parse_mode": "HTML",
+                "text": what
+                }
+            ).json()
 
         if not result["ok"]:
             raise RuntimeError("Telegram api send failure: `" + 
