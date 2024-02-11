@@ -14,9 +14,8 @@ if __name__ == "__main__":
     # Fetch readings
     readings_client = readings.Readings()
     readings_client.fetch()
-    readings_str = str(readings_client)
 
     # Send readings over to connectors
     for c in connectors:
         connector_obj = c(config)
-        connector_obj.send(readings_str)
+        connector_obj.send(readings_client)

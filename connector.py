@@ -2,6 +2,7 @@ import abc
 
 import requests
 
+import readings
 
 class Connector(abc.ABC):
 
@@ -9,7 +10,7 @@ class Connector(abc.ABC):
         self.config = config
     
     @abc.abstractmethod
-    def send(self, what: str):
+    def send(self, what: readings.Readings):
         pass
 
 
@@ -17,15 +18,36 @@ class TelegramConnector(Connector):
 
     MAX_MSG_SIZE = 4096
 
-    def send(self, what: str):
-        for start in range(0, len(what), self.MAX_MSG_SIZE):
-            self._send(what[start: start+self.MAX_MSG_SIZE])
-    
+    def send(self, what: readings.Readings):
+
+        current_batch = []
+        current_batch_length = 0
+
+        for element in what.get_chunks():
+            current_str = element.as_telegram()
+            l = len(current_str)
+
+            if l > self.MAX_MSG_SIZE:
+                raise NotImplemented("Sending chunks longer than one message"
+                                     "is not supported")
+
+            if l + current_batch_length > self.MAX_MSG_SIZE:
+                self._send("".join(current_batch))
+                current_batch, current_batch_length = [], 0
+
+            current_batch.append(current_str)
+            current_batch_length += l
+
+        if current_batch:
+            self._send("".join(current_batch))
+
     def _send(self, what: str):
         """Raw sends a message with no regard for length"""
         result = requests.post(
             f"https://api.telegram.org/bot{self.config['telegram']['api_key']}/sendMessage", 
-            json={"chat_id": self.config["telegram"]["chat_id"], "text": what}).json()
+            json={"chat_id": self.config["telegram"]["chat_id"],
+                   "text": what,
+                   "parse_mode": "HTML"}).json()
 
         if not result["ok"]:
             raise RuntimeError("Telegram api send failure: `" + 

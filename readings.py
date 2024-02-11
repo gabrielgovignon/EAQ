@@ -1,7 +1,48 @@
 import datetime as dt
 import re
+from enum import Enum
+import abc
 
 import requests
+
+
+class Formatting(Enum):
+    NONE = 0
+    BOLD = 1
+    ITALIC = 2
+
+
+class ChunkBase(abc.ABC):
+    @abc.abstractmethod
+    def as_telegram(self):
+        pass
+
+
+class Chunk(ChunkBase):
+    """Represents a line of a reading, stuff that should be atomic"""
+    def __init__(self, text: str, format: Formatting = Formatting.NONE):
+        self.text = self.strip_html_tags(text).replace("\n", "")
+        self.format = format
+
+    @staticmethod
+    def strip_html_tags(s):
+        return re.sub('<[^<]+?>', '', s)
+
+    def as_telegram(self):
+        if self.format == Formatting.BOLD:
+            return f"<b>{self.text}</b>"
+        elif self.format == Formatting.ITALIC:
+            return f"<i>{self.text}</i>"
+        else:
+            return self.text
+
+class SpacingChunk(ChunkBase):
+
+    def __init__(self, spacing: int = 2):
+        self.spacing = spacing
+
+    def as_telegram(self):
+        return "\n" * self.spacing
 
 
 class Readings:
@@ -23,24 +64,26 @@ class Readings:
         self._data = response.json()
 
     @classmethod
-    def _format_single_reading(cls, reading):
-        """Reading formated as a dict. Just append the stuff together"""
+    def _format_single_reading(cls, reading: dict):
+        """Yields the format blocks for a single reading"""
 
-        strings_to_append = [reading.get("intro_lue"), 
-                             reading.get("ref"), reading.get("contenu")]
+        yield Chunk(reading["ref"], Formatting.BOLD)
+        yield SpacingChunk()
 
-        return "\n".join([cls.strip_html_tags(x) 
-                          for x in strings_to_append if x is not None])
+        if reading.get("refrain_psalmique"):
+            yield Chunk(reading["refrain_psalmique"], Formatting.BOLD)
+            yield SpacingChunk(1)
+            yield Chunk(reading["ref_refrain"], Formatting.ITALIC)
+            yield SpacingChunk(2)
 
-    @staticmethod
-    def strip_html_tags(s):
-        return re.sub('<[^<]+?>', '', s)
+        for sentence in reading["contenu"].split("\n"):
+            yield Chunk(sentence)
+            yield SpacingChunk(1)
+    
+    def get_chunks(self):
+        """Yields the chuncks to be displayed"""
+        for reading in self._data["messes"][0]["lectures"]:
+            for c in self._format_single_reading(reading):
+                yield c
+            yield SpacingChunk(4)
 
-    def __str__(self):
-        if self._data is None:
-            raise RuntimeError("Readings not fetched yet")
-
-        return "\n\n\n".join([
-            self._format_single_reading(x) for x in
-            self._data["messes"][0]["lectures"]
-        ])
