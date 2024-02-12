@@ -1,4 +1,6 @@
 import json
+import sys
+import datetime as dt
 
 import readings
 import connector
@@ -13,7 +15,9 @@ if __name__ == "__main__":
 
     # Fetch readings
     readings_client = readings.Readings()
-    readings_client.fetch()
+    date = dt.datetime.now().date() if len(sys.argv) <= 1 \
+        else dt.date.fromisoformat(sys.argv[1])
+    readings_client.fetch(date)
 
     # Send readings over to connectors
     for c in connectors:

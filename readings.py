@@ -5,7 +5,6 @@ import abc
 
 import requests
 
-
 class Formatting(Enum):
     NONE = 0
     BOLD = 1
@@ -21,7 +20,7 @@ class ChunkBase(abc.ABC):
 class Chunk(ChunkBase):
     """Represents a line of a reading, stuff that should be atomic"""
     def __init__(self, text: str, format: Formatting = Formatting.NONE):
-        self.text = self.strip_html_tags(text).replace("\n", "")
+        self.text = self.strip_html_tags(text)
         self.format = format
 
     @staticmethod
@@ -38,7 +37,7 @@ class Chunk(ChunkBase):
 
 class SpacingChunk(ChunkBase):
 
-    def __init__(self, spacing: int = 2):
+    def __init__(self, spacing: int = 1):
         self.spacing = spacing
 
     def as_telegram(self):
@@ -55,6 +54,7 @@ class Readings:
         """Fetches the readings for the corresponding day"""
         if day is None:
             day = dt.datetime.now().date()
+        self._day = day
         response = requests.get(
             f"https://api.aelf.org/v1/messes/{day:%Y-%m-%d}/france")
 
@@ -66,24 +66,81 @@ class Readings:
     @classmethod
     def _format_single_reading(cls, reading: dict):
         """Yields the format blocks for a single reading"""
+        if reading["type"] == "psaume":
+            return cls._format_psalm(reading)
+        else:
+            return cls._format_normal_reading(reading)
 
-        yield Chunk(reading["ref"], Formatting.BOLD)
+    @classmethod
+    def _format_psalm(cls, reading: dict):
+        
+        # Psalm ref
+        matches = re.match("^Ps (\d+)", reading["ref"])
+
+        yield Chunk(f"Psaume {matches.group(1)}", Formatting.BOLD)
         yield SpacingChunk()
-
-        if reading.get("refrain_psalmique"):
-            yield Chunk(reading["refrain_psalmique"], Formatting.BOLD)
-            yield SpacingChunk(1)
-            yield Chunk(reading["ref_refrain"], Formatting.ITALIC)
-            yield SpacingChunk(2)
+        yield Chunk("R/ " + reading["refrain_psalmique"], Formatting.ITALIC)
+        yield SpacingChunk(2)
 
         for sentence in reading["contenu"].split("\n"):
             yield Chunk(sentence)
-            yield SpacingChunk(1)
-    
+            yield SpacingChunk()
+
+    @classmethod
+    def _format_normal_reading(cls, reading: dict):
+        yield Chunk(reading["intro_lue"], Formatting.BOLD)
+        yield SpacingChunk(1)
+        yield Chunk(reading["ref"], Formatting.ITALIC)
+        yield SpacingChunk(2)
+
+        for sentence in reading["contenu"].split("\n"):
+            stripped_sentence = sentence.strip()
+
+            if stripped_sentence and stripped_sentence not in \
+                {"– Acclamons la Parole de Dieu.", 
+                 "– Parole du Seigneur."}:
+                yield Chunk(stripped_sentence + ' ')
+
     def get_chunks(self):
-        """Yields the chuncks to be displayed"""
+        """Yields the chunks to be displayed"""
+
+        for x in self._header():
+            yield x
+        yield SpacingChunk(2)
+
         for reading in self._data["messes"][0]["lectures"]:
             for c in self._format_single_reading(reading):
                 yield c
-            yield SpacingChunk(4)
+            yield SpacingChunk(2)
 
+    def _header(self):
+        # Date
+        info = self._data["informations"]
+
+        num = str(self._day.day) if self._day.day > 1 else "1er"
+        month = ["janvier", "février", "mars", "avril", "mai", "juin", 
+                 "juillet", "août", "septembre", "octobre", "novembre",
+                 "décembre"][self._day.month - 1]
+        
+        jour = ["lundi", "mardi", "mercredi", "jeudi", "vendredi",
+                "samedi", "dimanche"][self._day.weekday()]
+
+        yield Chunk(f"{self._get_colour_emoji(info['couleur'])} "
+                    f"{jour.capitalize()} {num} {month} {self._day.year}")
+        
+        if jour != "dimanche" and info["fete"] != "Solennit\u00e9"\
+            and info["semaine"]:
+            yield SpacingChunk()
+            yield Chunk(info["semaine"])
+
+        if info["jour_liturgique_nom"] != "de la f\u00e9rie":
+            yield SpacingChunk()
+            yield Chunk(info["jour_liturgique_nom"])
+
+    def _get_colour_emoji(self, colour_ref):
+        return {
+            "rouge": "🔴",
+            "vert": "🟢",
+            "blanc": "⚪",
+            "violet": "🟣"
+        }[colour_ref]
