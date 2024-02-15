@@ -75,7 +75,7 @@ class Readings:
     def _format_psalm(cls, reading: dict):
         
         # Psalm ref
-        matches = re.match("^Ps (\d+)", reading["ref"])
+        matches = re.match("^(?:Ps )?(\d+)", reading["ref"])
 
         yield Chunk(f"Psaume {matches.group(1)}", Formatting.BOLD)
         yield SpacingChunk()
