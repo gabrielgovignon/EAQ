@@ -75,9 +75,11 @@ class Readings:
     def _format_psalm(cls, reading: dict):
         
         # Psalm ref
-        matches = re.match("^(?:Ps )?(\d+)", reading["ref"])
+        if matches := re.match("^(?:Ps )?(\d+)", reading["ref"]):
+            yield Chunk(f"Psaume {matches.group(1)}", Formatting.BOLD)
+        else:
+            yield Chunk(reading["ref"], Formatting.BOLD)
 
-        yield Chunk(f"Psaume {matches.group(1)}", Formatting.BOLD)
         yield SpacingChunk()
         yield Chunk("R/ " + reading["refrain_psalmique"], Formatting.ITALIC)
         yield SpacingChunk(2)
@@ -121,13 +123,13 @@ class Readings:
         month = ["janvier", "février", "mars", "avril", "mai", "juin", 
                  "juillet", "août", "septembre", "octobre", "novembre",
                  "décembre"][self._day.month - 1]
-        
+
         jour = ["lundi", "mardi", "mercredi", "jeudi", "vendredi",
                 "samedi", "dimanche"][self._day.weekday()]
 
         yield Chunk(f"{self._get_colour_emoji(info['couleur'])} "
                     f"{jour.capitalize()} {num} {month} {self._day.year}")
-        
+
         if jour != "dimanche" and info["fete"] != "Solennit\u00e9"\
             and info["semaine"]:
             yield SpacingChunk()
