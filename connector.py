@@ -6,17 +6,14 @@ import readings
 
 class Connector(abc.ABC):
 
+    MAX_MSG_SIZE = float('inf')
+
     def __init__(self, config):
         self.config = config
     
     @abc.abstractmethod
     def send(self, what: readings.Readings):
         pass
-
-
-class TelegramConnector(Connector):
-
-    MAX_MSG_SIZE = 4096
 
     def send(self, what: readings.Readings):
 
@@ -40,6 +37,16 @@ class TelegramConnector(Connector):
 
         if current_batch:
             self._send("".join(current_batch))
+
+
+class TestConnector(Connector):
+    def _send(self, what):
+        print("\n" + "=" * 30)
+        print(what)
+
+class TelegramConnector(Connector):
+
+    MAX_MSG_SIZE = 4096
 
     def _send(self, what: str):
         """Raw sends a message with no regard for length"""
